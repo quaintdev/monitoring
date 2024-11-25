@@ -1,4 +1,4 @@
-module github.com/dr0han/rh-monitor
+module github.com/quaintdev/monitoring
 
 go 1.23.3
 
