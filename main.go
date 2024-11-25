@@ -101,7 +101,7 @@ func main() {
 			readingCounter++
 		}
 	}()
-	log.Println("Started monitoring system metrics")
+	log.Printf("Started monitoring system metrics at interval of %d seconds \n", config.Interval)
 	log.Println("API server available at port:", config.ApiServerPort)
 	http.HandleFunc("/query", handleQuery(config))
 	http.HandleFunc("/avg", handleAvg(config))
