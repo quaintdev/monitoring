@@ -41,6 +41,7 @@ It then displays these metrics using Grafana. It supports following features
 2. Before execution ensure that you have a config file ready whose structure should look like below
     ```json
     {
+      "apiServerPort": "8080",
       "interval": 5,
       "prometheusHost": "localhost",
       "prometheusPort": "9090",
@@ -53,7 +54,7 @@ It then displays these metrics using Grafana. It supports following features
    - `interval` - polling interval in seconds  
    - `prometheusHost` & `prometheusPort` should be set to prometheus endpoint  
    - `alert` specifies CPU `threshold` above which the alert should be generated. Here `readings` specifies the number of reading to be used for calculating average. Alerts are saved to `alert.txt`
-3. Now the application can be run using below command
+3. Once you are ready with `config.json` you can run application using below command
     ```shell
     monitoring path/to/config.json
     ```

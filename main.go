@@ -17,7 +17,7 @@ type Alert struct {
 }
 
 type Config struct {
-	Host           string
+	ApiServerPort  string
 	Interval       int
 	PrometheusHost string
 	PrometheusPort string
@@ -30,6 +30,11 @@ func main() {
 	m := Metrics{
 		DiskCounters:    make(map[string]DiskStats),
 		NetworkCounters: make(map[string]NetworkStats),
+	}
+
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: monitoring path/to/config.json")
+		return
 	}
 
 	configFile, err := os.Open(os.Args[1])
@@ -96,11 +101,12 @@ func main() {
 			readingCounter++
 		}
 	}()
-
+	log.Println("Started monitoring system metrics")
+	log.Println("API server available at port:", config.ApiServerPort)
 	http.HandleFunc("/query", handleQuery(config))
 	http.HandleFunc("/avg", handleAvg(config))
 	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":"+config.ApiServerPort, nil)
 }
 
 func generateAlert(alertStr string) {
