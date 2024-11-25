@@ -32,7 +32,7 @@ func main() {
 		NetworkCounters: make(map[string]NetworkStats),
 	}
 
-	configFile, err := os.Open("config.json")
+	configFile, err := os.Open(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
