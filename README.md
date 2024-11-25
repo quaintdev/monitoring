@@ -3,9 +3,6 @@
 This application collects metrics of system like CPU Usage, Memory Usage, disk i/o and network i/o.
 It then displays these metrics using Grafana. It supports following features
 
-![Dashboards - Grafana](https://github.com/user-attachments/assets/741fbb54-dbb8-4be1-9dd4-728aefdf6ef3)
-
-
 ## Features
 - Collect metrics at configured interval
 - Store collected metrics in prometheus
@@ -62,3 +59,6 @@ It then displays these metrics using Grafana. It supports following features
     ```shell
     monitoring path/to/config.json
     ```
+## Grafana
+
+![Dashboards - Grafana](https://github.com/user-attachments/assets/741fbb54-dbb8-4be1-9dd4-728aefdf6ef3)
