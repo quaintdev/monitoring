@@ -17,9 +17,8 @@ type Alert struct {
 }
 
 type Config struct {
-	Host     string
-	Interval int
-
+	Host           string
+	Interval       int
 	PrometheusHost string
 	PrometheusPort string
 	Alert          Alert
