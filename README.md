@@ -12,6 +12,9 @@ It then displays these metrics using Grafana. It supports following features
 - Stores configured alerts in `alert.txt`
 - View stored metrics using grafana
 
+## Note
+- Currently, application only supports metric collection from Linux system
+
 ## Installation
 ### Pre-requisites
 1. Create volumes for prometheus and grafana
@@ -33,6 +36,17 @@ It then displays these metrics using Grafana. It supports following features
     -e GF_SECURITY_ADMIN_PASSWORD=admin \
     grafana/grafana-oss:latest 
     ```
+   **Note**: You will have to update `/etc/prometheus/prometheus.yml` within the `prometheus-config` volume.
+   You can use `podman volume inspect` to determine where the `prometheus-config` volume is mounted.
+   Your `prometheus.yml` should look like below
+   ```yaml
+   global:
+      scrape_interval: 3s
+   scrape_configs:
+      - job_name: "prometheus"
+        static_configs:
+         - targets: ["localhost:8080"] # the port here should be same as that of API endpoint
+   ```
 ## Install application
 1. The application can be installed using below command
    ```shell
