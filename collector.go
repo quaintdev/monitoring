@@ -11,35 +11,7 @@ import (
 	"strings"
 )
 
-type Metrics struct {
-	CPUUsage        int
-	MemoryUsage     int
-	NetworkCounters map[string]NetworkStats
-	DiskCounters    map[string]DiskStats
-}
-
-func (m *Metrics) Collect() {
-	err := m.RefreshCpuUsage()
-	if err != nil {
-		log.Printf("Error collecting cpu usage: %v", err)
-	}
-
-	err = m.RefreshMemoryUsage()
-	if err != nil {
-		log.Printf("Error collecting memory usage: %v", err)
-	}
-
-	err = m.RefreshNetworkCounters()
-	if err != nil {
-		log.Printf("Error collecting network counters: %v", err)
-	}
-
-	err = m.RefreshDiskCounters()
-	if err != nil {
-		log.Printf("Error collecting disk counters: %v", err)
-	}
-}
-func (m *Metrics) RefreshMemoryUsage() error {
+func RefreshMemoryUsage(manager MetricsManager) error {
 	cmd := exec.Command("free", "--line", "--mega")
 	cmdOutputByte, err := cmd.CombinedOutput()
 	if err != nil {
@@ -63,16 +35,17 @@ func (m *Metrics) RefreshMemoryUsage() error {
 	}
 
 	freeMem := result["CachUse"] + result["MemFree"]
-	m.MemoryUsage = result["MemUse"] * 100 / (freeMem + result["MemUse"])
+	memoryUsage := result["MemUse"] * 100 / (freeMem + result["MemUse"])
+	manager.UpdateMemoryUsage(float64(memoryUsage))
 	return nil
 }
 
 var prevCPUReading [10]int
 
-func (m *Metrics) RefreshCpuUsage() error {
+func RefreshCpuUsage(metricsManager MetricsManager) (float64, error) {
 	statsFile, err := os.Open("/proc/stat")
 	if err != nil {
-		return fmt.Errorf("could not open /proc/diskstats: %s", err)
+		return 0, fmt.Errorf("could not open /proc/diskstats: %s", err)
 	}
 	defer statsFile.Close()
 
@@ -89,7 +62,7 @@ func (m *Metrics) RefreshCpuUsage() error {
 		}
 		fieldValue, err := strconv.Atoi(field)
 		if err != nil {
-			return fmt.Errorf("could not convert total value for field %s", field)
+			return 0, fmt.Errorf("could not convert total value for field %s", field)
 		}
 		if k == 4 {
 			idle = fieldValue - prevCPUReading[k-1]
@@ -97,21 +70,17 @@ func (m *Metrics) RefreshCpuUsage() error {
 		total = total + fieldValue - prevCPUReading[k-1]
 		prevCPUReading[k-1] = fieldValue
 	}
-
+	var cpuUsage float64
 	if total > 0 {
-		m.CPUUsage = 100 - idle*100/total
+		cpuUsage = 100 - float64(idle)*100/float64(total)
+		metricsManager.UpdateCPUUsage(cpuUsage)
 	}
-	return nil
-}
-
-type DiskStats struct {
-	ReadBytes  uint64
-	WriteBytes uint64
+	return cpuUsage, nil
 }
 
 const sectorSize = 512
 
-func (m *Metrics) RefreshDiskCounters() error {
+func RefreshDiskCounters(manager MetricsManager) error {
 	statsFile, err := os.Open("/proc/diskstats")
 	if err != nil {
 		return fmt.Errorf("could not open /proc/diskstats: %s", err)
@@ -123,7 +92,6 @@ func (m *Metrics) RefreshDiskCounters() error {
 		line := scanner.Text()
 		line = strings.TrimSpace(line)
 		fieldRow := strings.Fields(line)
-		var diskStats DiskStats
 		sectorsRead, err := strconv.Atoi(fieldRow[5])
 		if err != nil {
 			log.Printf("could not parse disk stats: %s", err)
@@ -132,19 +100,13 @@ func (m *Metrics) RefreshDiskCounters() error {
 		if err != nil {
 			log.Printf("could not parse disk stats: %s", err)
 		}
-		diskStats.ReadBytes = uint64(sectorsRead * sectorSize)
-		diskStats.WriteBytes = uint64(sectorsWritten * sectorSize)
-		m.DiskCounters[fieldRow[2]] = diskStats
+		manager.UpdateDiskIo(fieldRow[2], "read", float64(sectorsRead*sectorSize))
+		manager.UpdateDiskIo(fieldRow[2], "write", float64(sectorsWritten*sectorSize))
 	}
 	return nil
 }
 
-type NetworkStats struct {
-	BytesSent int
-	BytesRecv int
-}
-
-func (m *Metrics) RefreshNetworkCounters() error {
+func RefreshNetworkCounters(manager MetricsManager) error {
 	statsFile, err := os.Open("/proc/net/dev")
 	if err != nil {
 		return fmt.Errorf("could not open /proc/diskstats: %s", err)
@@ -161,17 +123,18 @@ func (m *Metrics) RefreshNetworkCounters() error {
 		line := scanner.Text()
 		line = strings.TrimSpace(line)
 		fieldRow := strings.Fields(line)
-		var networkStats NetworkStats
-		networkStats.BytesRecv, err = strconv.Atoi(fieldRow[1])
+
+		bytesReceived, err := strconv.Atoi(fieldRow[1])
 		if err != nil {
 			log.Printf("could not parse disk stats: %s", err)
 		}
-		networkStats.BytesSent, err = strconv.Atoi(fieldRow[9])
+		bytesSent, err := strconv.Atoi(fieldRow[9])
 		if err != nil {
 			log.Printf("could not parse disk stats: %s", err)
 		}
 
-		m.NetworkCounters[fieldRow[0]] = networkStats
+		manager.UpdateNetworkIo(fieldRow[0], "received", float64(bytesReceived))
+		manager.UpdateNetworkIo(fieldRow[0], "sent", float64(bytesSent))
 	}
 	return nil
 }

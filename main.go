@@ -3,17 +3,34 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
 	"net/http"
 	"os"
 	"time"
 )
 
+type MetricsManager interface {
+	UpdateCPUUsage(float64)
+	UpdateMemoryUsage(float64)
+	UpdateDiskIo(string, string, float64)    //args: diskName, ioStr, value
+	UpdateNetworkIo(string, string, float64) // args: interfaceName, ioStr, value
+}
+
 type Alert struct {
 	Threshold int
 	Readings  int
+	FileName  string
+}
+
+// WriteAlert writes alert to the file
+func (a *Alert) WriteAlert(alert string) {
+	alertFile, err := os.OpenFile(a.FileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		log.Println("error writing alert to file", err)
+		return
+	}
+	defer alertFile.Close()
+	alertFile.WriteString(alert)
 }
 
 type Config struct {
@@ -27,10 +44,6 @@ type Config struct {
 const MB = 1024 * 1024
 
 func main() {
-	m := Metrics{
-		DiskCounters:    make(map[string]DiskStats),
-		NetworkCounters: make(map[string]NetworkStats),
-	}
 
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: monitoring path/to/config.json")
@@ -48,56 +61,46 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cpuMetric := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "CPUStats",
-	})
-	prometheus.MustRegister(cpuMetric)
-
-	memMetric := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "MemoryStats",
-	})
-	prometheus.MustRegister(memMetric)
-
-	diskMetrics := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "DiskStats",
-	}, []string{"device", "io"})
-	prometheus.MustRegister(diskMetrics)
-
-	networkMetrics := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "NetworkStats",
-	}, []string{"interface", "io"})
-	prometheus.MustRegister(networkMetrics)
-
-	var readingCounter int
-	var total float64
+	metricsManager := NewPrometheusMetricsManager()
 
 	ticker := time.NewTicker(time.Duration(config.Interval) * time.Second)
 	go func() {
-		for range ticker.C {
-			m.Collect()
+		var readingCounter int
+		var total float64
 
-			cpuMetric.Set(float64(m.CPUUsage))
-			total = total + float64(m.CPUUsage)
+		for range ticker.C {
+			cpuUsage, err := RefreshCpuUsage(metricsManager)
+			if err != nil {
+				log.Println(err)
+			}
+
+			//generate alert for cpuUsage
+			total = total + cpuUsage
 			if readingCounter >= config.Alert.Readings {
 				avg := total / float64(readingCounter)
 				if avg >= float64(config.Alert.Threshold) {
-					generateAlert(fmt.Sprintf("CPU Usage remained above %d for last %d seconds\n",
-						config.Alert.Threshold, config.Interval*readingCounter))
+					alertStr := fmt.Sprintf("CPU Usage remained above %d for last %d seconds\n",
+						config.Alert.Threshold, config.Interval*readingCounter)
+					config.Alert.WriteAlert(alertStr)
 				}
 				readingCounter, total = 0, 0
 			}
 
-			memMetric.Set(float64(m.MemoryUsage))
-
-			for diskName, stats := range m.DiskCounters {
-				diskMetrics.WithLabelValues(diskName, "read").Add(float64(stats.ReadBytes / MB))
-				diskMetrics.WithLabelValues(diskName, "write").Add(float64(stats.WriteBytes / MB))
+			err = RefreshMemoryUsage(metricsManager)
+			if err != nil {
+				log.Println(err)
 			}
 
-			for interfaceName, stats := range m.NetworkCounters {
-				networkMetrics.WithLabelValues(interfaceName, "received").Add(float64(stats.BytesRecv / MB))
-				networkMetrics.WithLabelValues(interfaceName, "sent").Add(float64(stats.BytesSent / MB))
+			err = RefreshDiskCounters(metricsManager)
+			if err != nil {
+				log.Println(err)
 			}
+
+			err = RefreshNetworkCounters(metricsManager)
+			if err != nil {
+				log.Println(err)
+			}
+
 			readingCounter++
 		}
 	}()
@@ -105,23 +108,11 @@ func main() {
 	log.Println("API server available at port:", config.ApiServerPort)
 	http.HandleFunc("/query", handleQuery(config))
 	http.HandleFunc("/avg", handleAvg(config))
-	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", metricsManager.handler)
 	http.ListenAndServe(":"+config.ApiServerPort, nil)
 }
 
-func generateAlert(alertStr string) {
-	alertFile, err := os.OpenFile("alert.txt", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		log.Println("error writing alert to file", err)
-		return
-	}
-	defer alertFile.Close()
-
-	alertFile.WriteString(alertStr)
-}
-
 // handleQuery /query endpoint that takes query, start time, end time and step parameter
-// example: http://localhost:8080/query?query=CPUStats&end=2024-11-25T06:03:32Z&start=2024-11-25T05:59:32Z&step=15s
 func handleQuery(config Config) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query().Get("query")
