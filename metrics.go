@@ -19,8 +19,8 @@ func NewPrometheusMetricsManager() *PrometheusMetrics {
 	metricsManager := &PrometheusMetrics{
 		cpuUsage:    prometheus.NewGauge(prometheus.GaugeOpts{Name: "cpu_usage", Help: "CPU usage"}),
 		memoryUsage: prometheus.NewGauge(prometheus.GaugeOpts{Name: "memory_usage", Help: "Memory usage"}),
-		diskIo:      prometheus.NewCounterVec(prometheus.CounterOpts{Name: "DiskStats"}, []string{"device", "io"}),
-		networkIo:   prometheus.NewCounterVec(prometheus.CounterOpts{Name: "NetworkStats"}, []string{"device", "io"}),
+		diskIo:      prometheus.NewCounterVec(prometheus.CounterOpts{Name: "disk_io"}, []string{"device", "io"}),
+		networkIo:   prometheus.NewCounterVec(prometheus.CounterOpts{Name: "network_io"}, []string{"interface", "io"}),
 		handler:     promhttp.Handler(),
 	}
 	prometheus.MustRegister(metricsManager.cpuUsage, metricsManager.memoryUsage,

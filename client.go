@@ -60,11 +60,11 @@ func (c *PrometheusClient) AvgUsage(metric, startTime, endTime, step string) (fl
 	var total, counter float64
 	for _, value := range response.Data.Result[0].Values {
 		if len(value) >= 1 {
-			i, err := strconv.Atoi(value[1].(string))
+			i, err := strconv.ParseFloat(value[1].(string), 64)
 			if err != nil {
 				return 0, err
 			}
-			total += float64(i)
+			total += i
 			counter++
 		}
 	}

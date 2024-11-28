@@ -100,8 +100,8 @@ func RefreshDiskCounters(manager MetricsManager) error {
 		if err != nil {
 			log.Printf("could not parse disk stats: %s", err)
 		}
-		manager.UpdateDiskIo(fieldRow[2], "read", float64(sectorsRead*sectorSize))
-		manager.UpdateDiskIo(fieldRow[2], "write", float64(sectorsWritten*sectorSize))
+		manager.UpdateDiskIo(fieldRow[2], "read", float64(sectorsRead*sectorSize/MB))
+		manager.UpdateDiskIo(fieldRow[2], "write", float64(sectorsWritten*sectorSize/MB))
 	}
 	return nil
 }
@@ -133,8 +133,8 @@ func RefreshNetworkCounters(manager MetricsManager) error {
 			log.Printf("could not parse disk stats: %s", err)
 		}
 
-		manager.UpdateNetworkIo(fieldRow[0], "received", float64(bytesReceived))
-		manager.UpdateNetworkIo(fieldRow[0], "sent", float64(bytesSent))
+		manager.UpdateNetworkIo(fieldRow[0], "received", float64(bytesReceived/MB))
+		manager.UpdateNetworkIo(fieldRow[0], "sent", float64(bytesSent/MB))
 	}
 	return nil
 }
